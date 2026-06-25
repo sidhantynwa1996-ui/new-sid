@@ -1,0 +1,14 @@
+{
+  "name": "live-stock-tracker",
+  "version": "1.0.0",
+  "description": "A live stock price tracking web interface. Type any stock name or symbol and watch its price move in real time.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

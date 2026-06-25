@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Live Stock Tracker</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>" />
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <h1 class="brand">📈 Live Stock Tracker</h1>
+      <p class="tagline">Type any stock name or symbol and watch it move in real time.</p>
+    </header>
+
+    <section class="search">
+      <div class="search-box">
+        <input
+          id="searchInput"
+          type="text"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="Search a stock…  e.g. Apple, TSLA, Microsoft, NVDA"
+          aria-label="Search for a stock"
+        />
+        <ul id="suggestions" class="suggestions" hidden></ul>
+      </div>
+    </section>
+
+    <!-- Empty state -->
+    <section id="empty" class="empty">
+      <p>Start by searching for a company or ticker symbol above.</p>
+      <div class="chips">
+        <button class="chip" data-symbol="AAPL">AAPL · Apple</button>
+        <button class="chip" data-symbol="MSFT">MSFT · Microsoft</button>
+        <button class="chip" data-symbol="TSLA">TSLA · Tesla</button>
+        <button class="chip" data-symbol="NVDA">NVDA · NVIDIA</button>
+        <button class="chip" data-symbol="AMZN">AMZN · Amazon</button>
+        <button class="chip" data-symbol="BTC-USD">BTC-USD · Bitcoin</button>
+      </div>
+    </section>
+
+    <!-- Tracker card -->
+    <section id="tracker" class="tracker" hidden>
+      <div class="tracker-head">
+        <div class="ident">
+          <div class="symbol-row">
+            <span id="symbol" class="symbol"></span>
+            <span id="liveBadge" class="live-badge"><span class="dot"></span> LIVE</span>
+            <span id="marketState" class="market-state"></span>
+          </div>
+          <div id="name" class="company-name"></div>
+        </div>
+        <div class="price-block">
+          <div id="price" class="price"></div>
+          <div id="change" class="change"></div>
+        </div>
+      </div>
+
+      <div class="range-row" id="rangeRow">
+        <button class="range-btn active" data-range="1d" data-interval="1m">1D</button>
+        <button class="range-btn" data-range="5d" data-interval="15m">5D</button>
+        <button class="range-btn" data-range="1mo" data-interval="1d">1M</button>
+        <button class="range-btn" data-range="6mo" data-interval="1d">6M</button>
+        <button class="range-btn" data-range="1y" data-interval="1d">1Y</button>
+      </div>
+
+      <div class="chart-wrap">
+        <canvas id="chart"></canvas>
+        <div id="tooltip" class="tooltip" hidden></div>
+      </div>
+
+      <div class="stats" id="stats"></div>
+
+      <div class="footer-row">
+        <span id="updated" class="updated"></span>
+        <span id="status" class="status"></span>
+      </div>
+    </section>
+
+    <p class="disclaimer">
+      Data via Yahoo Finance, for informational purposes only — not investment advice.
+      Quotes may be delayed.
+    </p>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
