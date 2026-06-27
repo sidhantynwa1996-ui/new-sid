@@ -16,7 +16,14 @@ OUTPUT_FILE = os.path.join(BASE_DIR, "cfa_content.json")
 # English downstream. We strip them, rejoin hyphenated words, and tidy spacing
 # while keeping the line structure the section parser expects.
 JUNK_CHARS = dict.fromkeys(map(ord, "￾​‌‍﻿"), None)
-SPACED_CAP_RE = re.compile(r'\b([B-HJ-Z]) ([a-z]{2,})')
+# Rejoin a lone capital split from its word ("R ates" -> "Rates"), but never glue
+# it to a real following word ("B is correct" must stay intact, not "Bis correct").
+SPACED_CAP_RE = re.compile(
+    r'\b([B-HJ-Z]) '
+    r'(?!(?:is|are|was|were|be|am|as|in|on|of|or|to|by|at|an|it|we|he|the|and|'
+    r'for|not|but|can|has|had|may|our|its|his|her|who|all|any|one|two|do|so|'
+    r'if|up|us|no)\b)'
+    r'([a-z]{2,})')
 ODD_SPACES = {0x2007: " ", 0x2005: " ", 0x2006: " ", 0x2009: " ", 0x202f: " ",
               0x00a0: " ", 0x2002: " ", 0x2003: " ", 0x2004: " "}
 

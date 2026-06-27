@@ -57,14 +57,26 @@ def html_to_paragraphs(html):
 # length limits. These helpers repair what is safe, reject what is not, and
 # always trim to whole sentences so every option / flashcard reads correctly.
 
-# A single capital (not the real words "A"/"I") split from its lowercase tail.
-SPACED_CAP_RE = re.compile(r'\b([B-HJ-Z]) ([a-z]{2,})')
+# A single capital (not the real words "A"/"I") split from its lowercase tail,
+# e.g. "R ates" -> "Rates". The negative lookahead prevents gluing a capital to a
+# real following word ("B is correct" must NOT become "Bis correct"); genuine
+# drop-cap splits are word fragments ("ates", "ime"), never common words.
+SPACED_CAP_RE = re.compile(
+    r'\b([B-HJ-Z]) '
+    r'(?!(?:is|are|was|were|be|am|as|in|on|of|or|to|by|at|an|it|we|he|the|and|'
+    r'for|not|but|can|has|had|may|our|its|his|her|who|all|any|one|two|do|so|'
+    r'if|up|us|no)\b)'
+    r'([a-z]{2,})')
 # Hyphenation marker (U+FFFE) and the zero-width space family.
 JUNK_CHARS = dict.fromkeys(map(ord, "￾​‌‍﻿"), None)
 
 def repair_text(t):
     """Undo common extraction artifacts so text reads as normal prose."""
     t = t.translate(JUNK_CHARS)
+    if t.count('"') % 2:                      # drop an unbalanced straight quote
+        t = t.replace('"', '')
+    if (t.count('“') + t.count('”')) % 2:     # drop unbalanced curly quotes
+        t = t.replace('“', '').replace('”', '')
     t = SPACED_CAP_RE.sub(r'\1\2', t)        # "R ates" -> "Rates"
     t = re.sub(r'_{2,}|(?<=\s)_(?=\s)', ' ', t)  # leftover fraction / sqrt bars
     t = re.sub(r'\s+([,.;:%])', r'\1', t)    # space before punctuation
@@ -77,6 +89,8 @@ def quality_ok(t):
     if not t:
         return False
     if '￾' in t or '​' in t:
+        return False
+    if t.rstrip().endswith('…'):        # runaway sentence that had to be cut short
         return False
     if re.search(r'\b[B-HJ-Z] [a-z]{2,}', t):           # residual spaced capital
         return False
@@ -91,17 +105,26 @@ def quality_ok(t):
         return False
     return True
 
-def clamp_sentences(text, limit=240):
-    """Trim to whole sentences within `limit`; never cut a word in half."""
+def clamp_sentences(text, limit=240, hard_max=400):
+    """Trim to whole sentences; never cut a sentence (or word) in half.
+
+    Prefer the last sentence boundary at or before `limit`. If a single
+    sentence is longer than `limit`, keep it whole as long as it ends by
+    `hard_max` — better a slightly long complete sentence than a dangling
+    "…and a…". Only fall back to an ellipsis for runaway text past hard_max.
+    """
     text = text.strip()
     if len(text) <= limit:
         return text
-    window = text[:limit]
-    ends = list(re.finditer(r'[.!?](?=\s|$)', window))
-    if ends:
-        return window[:ends[-1].end()].strip()
-    sp = window.rfind(' ')
-    return (window[:sp].strip() + '…') if sp > 40 else window.strip()
+    ends = [m.end() for m in re.finditer(r'[.!?](?=\s|$)', text)]
+    within = [e for e in ends if e <= limit]
+    if within:
+        return text[:within[-1]].strip()
+    extended = [e for e in ends if e <= hard_max]
+    if extended:                       # keep one whole sentence past the soft limit
+        return text[:extended[-1]].strip()
+    sp = text[:limit].rfind(' ')       # runaway sentence: cut on a word boundary
+    return (text[:sp].strip() + '…') if sp > 40 else text[:limit].strip()
 
 def polish(text, limit=240, ensure_period=True):
     """Repair, trim to whole sentences, capitalise, and end with punctuation."""
@@ -183,8 +206,8 @@ def extract_definitions(paragraphs):
                 defn = m.group(2).strip().rstrip('.,;')
                 if len(term) < 5 or len(term) > 80:
                     break
-                if any(c in term for c in ('?', '!', '\n', '(', ')')):
-                    break
+                if any(c in term for c in ('?', '!', '\n', '(', ')', '"', '“', '”')):
+                    break  # a term is a noun phrase, never a quote or dialogue fragment
                 # Reject a term that spans a sentence boundary ("...stage. Who"),
                 # while keeping abbreviations like "U.S." intact.
                 if re.search(r'[a-z]\.\s+[A-Z]', term):
@@ -275,6 +298,14 @@ def extract_key_facts(paragraphs):
             continue
         # Skip lines containing page-number-embedded artifacts (digit followed by capital in mid-sentence)
         if re.search(r'\d{2,3}\s+[A-Z][a-z]', para):
+            continue
+        # Skip running-header bleed: a multi-word section title glued to a 3-digit
+        # page number and a caption fragment, e.g.
+        # "Monte Carlo Simulation 185 final and average stock prices.".
+        # Require 2+ Title-Case words and a non-unit following word so real
+        # sentences ("About 93 percent...", "The Russell 2000 Index...") are kept.
+        if re.match(r'^(?:[A-Z][a-z][\w.&/-]*\s+){2,6}\d{3}\s+'
+                    r'(?!percent|million|billion|basis|points|bps|bp\b)[a-z]', para):
             continue
         facts.append(para)
     return facts[:25]
