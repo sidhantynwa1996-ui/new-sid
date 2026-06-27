@@ -23,7 +23,12 @@
 
 body {
     font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
-    background: var(--bg-main);
+    /* CFA-branded backdrop: soft gold glow top-right, navy-blue glow bottom-left */
+    background:
+        radial-gradient(1100px 620px at 100% -8%, rgba(197,164,78,0.12), transparent 60%),
+        radial-gradient(1000px 700px at -8% 112%, rgba(26,95,180,0.10), transparent 55%),
+        var(--bg-main);
+    background-attachment: fixed;
     color: var(--text-primary);
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
@@ -1131,6 +1136,39 @@ body {
     font-weight: 700;
     color: var(--cfa-navy);
     margin-right: 10px;
+}
+
+/* ── CFA exam-style enhancements ───────────────────────────────────────── */
+/* Circular A/B/C answer badges, like a real exam choice. */
+.answer-option { display: flex; align-items: flex-start; gap: 12px; }
+.answer-option .option-letter {
+    flex: 0 0 auto;
+    width: 26px; height: 26px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--cfa-navy), #1f3a63);
+    color: #fff;
+    font-size: 13px;
+    margin-right: 0;
+}
+.answer-option.correct .option-letter { background: linear-gradient(135deg, var(--cfa-green), #15803d); }
+.answer-option.incorrect .option-letter { background: linear-gradient(135deg, var(--cfa-red), #b91c1c); }
+.answer-option.was-correct .option-letter { background: linear-gradient(135deg, var(--cfa-green), #15803d); }
+
+/* Exam-paper accent: a gold rule across the top of the question card. */
+.question-card {
+    border-top: 3px solid var(--cfa-gold);
+    position: relative;
+}
+.question-card::before {
+    content: "CFA LEVEL I";
+    position: absolute;
+    top: 12px; right: 20px;
+    font-size: 10px;
+    letter-spacing: 2px;
+    font-weight: 700;
+    color: var(--cfa-gold);
+    opacity: 0.65;
 }
 
 .explanation {

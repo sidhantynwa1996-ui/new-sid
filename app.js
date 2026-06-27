@@ -716,7 +716,14 @@ function updatePracticeModules() {
     const vol = cfaData.find(v => v.volume === volNum);
     if (!vol) return;
 
+    // Only list modules that actually have curated questions for this subject,
+    // so the dropdown never offers an empty selection.
+    const bank = (typeof CURATED_QUESTIONS !== 'undefined' && CURATED_QUESTIONS.length)
+        ? CURATED_QUESTIONS : QUESTION_BANK.questions;
+    const chaptersWithQs = new Set(bank.filter(q => q.volume === volNum).map(q => q.chapter));
+
     vol.chapters.forEach(ch => {
+        if (chaptersWithQs.size && !chaptersWithQs.has(ch.chapter)) return;
         const opt = document.createElement('option');
         opt.value = ch.chapter;
         opt.textContent = ch.title;
@@ -730,7 +737,11 @@ function startPractice() {
     const count = parseInt(document.getElementById('practiceCount').value);
     const difficulty = document.getElementById('practiceDifficulty').value;
 
-    let pool = QUESTION_BANK.questions;
+    // Use the curated CFA-exam-style bank for Practice; fall back to the
+    // auto-generated bank only if the curated set is unavailable.
+    let pool = (typeof CURATED_QUESTIONS !== 'undefined' && CURATED_QUESTIONS.length)
+        ? CURATED_QUESTIONS
+        : QUESTION_BANK.questions;
 
     if (subjectVal !== 'all') {
         pool = pool.filter(q => q.volume === parseInt(subjectVal));
@@ -1064,7 +1075,9 @@ function renderExamSetup() {
 }
 
 function startExam(type) {
-    let pool = [...QUESTION_BANK.questions];
+    const examBank = (typeof CURATED_QUESTIONS !== 'undefined' && CURATED_QUESTIONS.length)
+        ? CURATED_QUESTIONS : QUESTION_BANK.questions;
+    let pool = [...examBank];
     let questionCount, timeMinutes;
 
     if (type === 'full') {
