@@ -1,5 +1,8 @@
 import json
 import re
+import os
+
+CONTENT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cfa_content.json")
 
 KNOWN_TITLES = {
     1: {
@@ -118,7 +121,7 @@ KNOWN_TITLES = {
     },
 }
 
-with open(r"C:\Users\siddh\cfa-tutor\cfa_content.json", "r", encoding="utf-8") as f:
+with open(CONTENT_FILE, "r", encoding="utf-8") as f:
     data = json.load(f)
 
 for vol in data:
@@ -129,7 +132,7 @@ for vol in data:
         if ch_num in vol_titles:
             ch["title"] = vol_titles[ch_num]
 
-with open(r"C:\Users\siddh\cfa-tutor\cfa_content.json", "w", encoding="utf-8") as f:
+with open(CONTENT_FILE, "w", encoding="utf-8") as f:
     json.dump(data, f, ensure_ascii=False, indent=2)
 
 total = sum(len(v["chapters"]) for v in data)
