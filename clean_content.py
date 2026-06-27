@@ -1,7 +1,10 @@
 import json
 import re
+import os
 
-with open(r"C:\Users\siddh\cfa-tutor\cfa_content.json", "r", encoding="utf-8") as f:
+CONTENT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cfa_content.json")
+
+with open(CONTENT_FILE, "r", encoding="utf-8") as f:
     data = json.load(f)
 
 KNOWN_TITLES = {
@@ -125,7 +128,9 @@ def fix_spaced_letters(text):
     for pattern, replacement in fixes.items():
         text = re.sub(pattern, replacement, text)
 
-    text = re.sub(r'\b([A-Z])\s([a-z]{3,})\b', lambda m: m.group(1) + m.group(2) if len(m.group(2)) > 2 else m.group(0), text)
+    # Rejoin a lone capital split from its word ("R ates" -> "Rates"), but never
+    # the real one-letter words "A"/"I" (so "A bond" / "I think" stay intact).
+    text = re.sub(r'\b([B-HJ-Z])\s([a-z]{3,})\b', lambda m: m.group(1) + m.group(2), text)
 
     return text
 
@@ -621,8 +626,8 @@ for vol in data:
         num_subsections = sum(len(s.get("subsections", [])) for s in sections)
         print(f"    Module {ch_num}: {ch_title} -> {num_sections} sections, {num_subsections} subsections, {total_html:,} chars HTML")
 
-with open(r"C:\Users\siddh\cfa-tutor\cfa_content.json", "w", encoding="utf-8") as f:
+with open(CONTENT_FILE, "w", encoding="utf-8") as f:
     json.dump(data, f, ensure_ascii=False, indent=2)
 
-file_size = __import__('os').path.getsize(r"C:\Users\siddh\cfa-tutor\cfa_content.json") / (1024 * 1024)
+file_size = os.path.getsize(CONTENT_FILE) / (1024 * 1024)
 print(f"\nDone! File size: {file_size:.1f} MB")

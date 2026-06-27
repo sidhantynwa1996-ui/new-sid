@@ -1,10 +1,43 @@
 import json
 import os
 import re
-from PyPDF2 import PdfReader
+import glob
+import pypdfium2 as pdfium
 
-PDF_DIR = r"C:\Users\siddh\cfa-tutor\pdfs"
-OUTPUT_FILE = r"C:\Users\siddh\cfa-tutor\cfa_content.json"
+# Resolve paths relative to this script so the pipeline runs on any machine.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# PDFs may sit beside the script or in a ./pdfs subfolder.
+PDF_DIR = os.path.join(BASE_DIR, "pdfs") if os.path.isdir(os.path.join(BASE_DIR, "pdfs")) else BASE_DIR
+OUTPUT_FILE = os.path.join(BASE_DIR, "cfa_content.json")
+
+# ─── Text cleaning ────────────────────────────────────────────────────────────
+# The CFA PDFs encode line-break hyphens as U+FFFE inside words ("with￾drawal")
+# and pepper the text with zero-width spaces; left in place these read as broken
+# English downstream. We strip them, rejoin hyphenated words, and tidy spacing
+# while keeping the line structure the section parser expects.
+JUNK_CHARS = dict.fromkeys(map(ord, "￾​‌‍﻿"), None)
+# Rejoin a lone capital split from its word ("R ates" -> "Rates"), but never glue
+# it to a real following word ("B is correct" must stay intact, not "Bis correct").
+SPACED_CAP_RE = re.compile(
+    r'\b([B-HJ-Z]) '
+    r'(?!(?:is|are|was|were|be|am|as|in|on|of|or|to|by|at|an|it|we|he|the|and|'
+    r'for|not|but|can|has|had|may|our|its|his|her|who|all|any|one|two|do|so|'
+    r'if|up|us|no)\b)'
+    r'([a-z]{2,})')
+ODD_SPACES = {0x2007: " ", 0x2005: " ", 0x2006: " ", 0x2009: " ", 0x202f: " ",
+              0x00a0: " ", 0x2002: " ", 0x2003: " ", 0x2004: " "}
+
+def clean_page_text(text):
+    text = text.translate(JUNK_CHARS).translate(ODD_SPACES)
+    # Rejoin words split by a real end-of-line hyphen: "port-\nfolio" -> "portfolio"
+    text = re.sub(r'(\w)[-‐]\s*\n\s*(\w)', r'\1\2', text)
+    lines = []
+    for line in text.split("\n"):
+        line = line.replace("\r", "")
+        line = SPACED_CAP_RE.sub(r'\1\2', line)   # "R ates" -> "Rates"
+        line = re.sub(r'[ \t]+', ' ', line)
+        lines.append(line.rstrip())
+    return "\n".join(lines)
 
 VOLUMES = [
     {"file": "CFA Institute - 2025 CFA© Program Curriculum Level I Volume 1 - QUANTITATIVE METHODS. 1-CFA Institute (2025).pdf", "volume": 1, "subject": "Quantitative Methods"},
@@ -24,17 +57,32 @@ def clean_title(title):
     title = re.sub(r'\s+(\d+)$', '', title)
     return title
 
+def resolve_pdf_path(vol_info):
+    """Find the PDF for a volume, tolerating filename variations."""
+    exact = os.path.join(PDF_DIR, vol_info["file"])
+    if os.path.isfile(exact):
+        return exact
+    # Fall back to matching by "Volume N" in the filename.
+    pat = re.compile(rf'Volume\s+{vol_info["volume"]}\b')
+    for path in glob.glob(os.path.join(PDF_DIR, "*.pdf")):
+        if pat.search(os.path.basename(path)):
+            return path
+    return None
+
 def extract_volume(vol_info):
-    filepath = os.path.join(PDF_DIR, vol_info["file"])
+    filepath = resolve_pdf_path(vol_info)
+    if not filepath:
+        print(f"  Skipping Volume {vol_info['volume']}: {vol_info['subject']} (PDF not found)")
+        return None
     print(f"  Reading Volume {vol_info['volume']}: {vol_info['subject']}...")
 
-    reader = PdfReader(filepath)
-    total_pages = len(reader.pages)
+    pdf = pdfium.PdfDocument(filepath)
+    total_pages = len(pdf)
 
     page_texts = []
-    for i, page in enumerate(reader.pages):
-        text = page.extract_text() or ""
-        page_texts.append(text.strip())
+    for i in range(total_pages):
+        text = pdf[i].get_textpage().get_text_range() or ""
+        page_texts.append(clean_page_text(text).strip())
 
     module_pattern = re.compile(
         r'(?:Learning Module|LEARNING MODULE)\s+(\d+)\s+(.*?)(?:\n|$)',
@@ -133,7 +181,8 @@ all_volumes = []
 for vol in VOLUMES:
     try:
         result = extract_volume(vol)
-        all_volumes.append(result)
+        if result is not None:
+            all_volumes.append(result)
     except Exception as e:
         print(f"  ERROR with Volume {vol['volume']}: {e}")
         import traceback

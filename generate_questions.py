@@ -50,6 +50,93 @@ def html_to_paragraphs(html):
     return p.paras
 
 
+# ─── Text polishing ───────────────────────────────────────────────────────────
+# The source text (extracted from the PDFs) carries artifacts that read as
+# broken English: a lone capital glued to a lowercase tail ("R ates", "T ime"),
+# zero-width / stray hyphenation characters, and sentences cut mid-word by fixed
+# length limits. These helpers repair what is safe, reject what is not, and
+# always trim to whole sentences so every option / flashcard reads correctly.
+
+# A single capital (not the real words "A"/"I") split from its lowercase tail,
+# e.g. "R ates" -> "Rates". The negative lookahead prevents gluing a capital to a
+# real following word ("B is correct" must NOT become "Bis correct"); genuine
+# drop-cap splits are word fragments ("ates", "ime"), never common words.
+SPACED_CAP_RE = re.compile(
+    r'\b([B-HJ-Z]) '
+    r'(?!(?:is|are|was|were|be|am|as|in|on|of|or|to|by|at|an|it|we|he|the|and|'
+    r'for|not|but|can|has|had|may|our|its|his|her|who|all|any|one|two|do|so|'
+    r'if|up|us|no)\b)'
+    r'([a-z]{2,})')
+# Hyphenation marker (U+FFFE) and the zero-width space family.
+JUNK_CHARS = dict.fromkeys(map(ord, "￾​‌‍﻿"), None)
+
+def repair_text(t):
+    """Undo common extraction artifacts so text reads as normal prose."""
+    t = t.translate(JUNK_CHARS)
+    if t.count('"') % 2:                      # drop an unbalanced straight quote
+        t = t.replace('"', '')
+    if (t.count('“') + t.count('”')) % 2:     # drop unbalanced curly quotes
+        t = t.replace('“', '').replace('”', '')
+    t = SPACED_CAP_RE.sub(r'\1\2', t)        # "R ates" -> "Rates"
+    t = re.sub(r'_{2,}|(?<=\s)_(?=\s)', ' ', t)  # leftover fraction / sqrt bars
+    t = re.sub(r'\s+([,.;:%])', r'\1', t)    # space before punctuation
+    t = re.sub(r'\(\s+', '(', t)
+    t = re.sub(r'\s{2,}', ' ', t)
+    return t.strip()
+
+def quality_ok(t):
+    """Reject text still fragmented after repair, so it never reaches the UI."""
+    if not t:
+        return False
+    if '￾' in t or '​' in t:
+        return False
+    if t.rstrip().endswith('…'):        # runaway sentence that had to be cut short
+        return False
+    if re.search(r'\b[B-HJ-Z] [a-z]{2,}', t):           # residual spaced capital
+        return False
+    if re.search(r'[√∑∫=≈≤≥]', t):                       # leaked math/formula fragment
+        return False
+    if len(re.findall(r'\b\d+\.\d+\b', t)) >= 2:         # numeric table row
+        return False
+    toks = t.split()
+    if len(toks) < 4:
+        return False
+    if sum(1 for w in toks if len(w) <= 2) / len(toks) > 0.45:  # too many stubs
+        return False
+    return True
+
+def clamp_sentences(text, limit=240, hard_max=400):
+    """Trim to whole sentences; never cut a sentence (or word) in half.
+
+    Prefer the last sentence boundary at or before `limit`. If a single
+    sentence is longer than `limit`, keep it whole as long as it ends by
+    `hard_max` — better a slightly long complete sentence than a dangling
+    "…and a…". Only fall back to an ellipsis for runaway text past hard_max.
+    """
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    ends = [m.end() for m in re.finditer(r'[.!?](?=\s|$)', text)]
+    within = [e for e in ends if e <= limit]
+    if within:
+        return text[:within[-1]].strip()
+    extended = [e for e in ends if e <= hard_max]
+    if extended:                       # keep one whole sentence past the soft limit
+        return text[:extended[-1]].strip()
+    sp = text[:limit].rfind(' ')       # runaway sentence: cut on a word boundary
+    return (text[:sp].strip() + '…') if sp > 40 else text[:limit].strip()
+
+def polish(text, limit=240, ensure_period=True):
+    """Repair, trim to whole sentences, capitalise, and end with punctuation."""
+    t = clamp_sentences(repair_text(text), limit)
+    if not t:
+        return t
+    t = t[0].upper() + t[1:]
+    if ensure_period and t[-1] not in '.!?…':
+        t = t.rstrip(',;:') + '.'
+    return t
+
+
 # ─── Garbage filters ──────────────────────────────────────────────────────────
 
 GARBAGE_RE = re.compile(
@@ -79,17 +166,28 @@ DEF_PATTERNS = [
 ]
 
 BAD_TERM_STARTS = ('it ', 'they ', 'this ', 'these ', 'those ', 'such ', 'one ', 'each ',
-                   'many ', 'most ', 'some ', 'both ', 'when ', 'if ', 'as ', 'for ', 'in ')
+                   'many ', 'most ', 'some ', 'both ', 'when ', 'if ', 'as ', 'for ', 'in ',
+                   'an important ', 'a number ', 'the following ', 'the same ', 'the above ',
+                   'the term ', 'a result ', 'the value ', 'the way ', 'a key ', 'the key ',
+                   'a common ', 'the main ', 'a good ', 'the goal ', 'the idea ', 'a major ')
 
 # Matches section/page number artifacts like "9 A", "12 B", "33 The"
 SECTION_REF_RE = re.compile(r'\b\d{1,3}\s+[A-Z]')
 
 def clean_term(term):
-    """Remove trailing punctuation and section-number artifacts."""
-    term = term.strip().rstrip(',;:')
+    """Remove trailing punctuation and section-number artifacts, repair spacing."""
+    term = repair_text(term).strip('"“”\'').rstrip(',;:')
     # Remove leading section references like "9 A" or "33 "
     term = re.sub(r'^\d{1,3}\s+', '', term)
-    term = re.sub(r'^[A-Z]\s+', '', term)  # stray single-letter prefix
+    term = re.sub(r'^[B-HJ-Z]\s+', '', term)  # stray single-letter prefix (keep "A"/"I")
+    # Drop a leading transition adverb so the term is the noun phrase itself,
+    # e.g. "Finally, the least competitive market structure" -> "the least ...".
+    term = re.sub(r'^(?:Finally|However|Moreover|Therefore|Thus|Hence|Furthermore|'
+                  r'Indeed|Similarly|Conversely|Notably|Additionally|First|Second|'
+                  r'Third|Next|Then|In addition|For example)\s*,?\s+', '', term, flags=re.I)
+    # Drop a leading ALL-CAPS section heading glued before the real term,
+    # e.g. "PRICE-TO-EARNINGS RATIO Price-to-earnings ratio" -> "Price-to-earnings ratio"
+    term = re.sub(r'^(?:[A-Z][A-Z\-/]{2,}\s+){1,}(?=[A-Z][a-z])', '', term)
     return term.strip()
 
 def extract_definitions(paragraphs):
@@ -108,7 +206,13 @@ def extract_definitions(paragraphs):
                 defn = m.group(2).strip().rstrip('.,;')
                 if len(term) < 5 or len(term) > 80:
                     break
-                if any(c in term for c in ('?', '!', '\n', '(', ')')):
+                if any(c in term for c in ('?', '!', '\n', '(', ')', '"', '“', '”')):
+                    break  # a term is a noun phrase, never a quote or dialogue fragment
+                # Reject a term that spans a sentence boundary ("...stage. Who"),
+                # while keeping abbreviations like "U.S." intact.
+                if re.search(r'[a-z]\.\s+[A-Z]', term):
+                    break
+                if len(term.split()) > 12:        # a term is a phrase, not a sentence
                     break
                 if term.lower().startswith(BAD_TERM_STARTS):
                     break
@@ -134,10 +238,15 @@ def extract_definitions(paragraphs):
                 # Definition must not be incomplete (ending with colon or very short)
                 if defn.endswith(':') or len(defn) < 20:
                     break
+                # Polish into a complete, well-formed sentence and quality-gate it.
+                definition = polish(defn, limit=240)
+                sentence   = polish(para, limit=260)
+                if not quality_ok(definition) or not quality_ok(term):
+                    break
                 defs.append({
                     'term': term,
-                    'definition': defn[:250],
-                    'sentence': para[:300],
+                    'definition': definition,
+                    'sentence': sentence,
                 })
                 break
     return defs
@@ -190,6 +299,14 @@ def extract_key_facts(paragraphs):
         # Skip lines containing page-number-embedded artifacts (digit followed by capital in mid-sentence)
         if re.search(r'\d{2,3}\s+[A-Z][a-z]', para):
             continue
+        # Skip running-header bleed: a multi-word section title glued to a 3-digit
+        # page number and a caption fragment, e.g.
+        # "Monte Carlo Simulation 185 final and average stock prices.".
+        # Require 2+ Title-Case words and a non-unit following word so real
+        # sentences ("About 93 percent...", "The Russell 2000 Index...") are kept.
+        if re.match(r'^(?:[A-Z][a-z][\w.&/-]*\s+){2,6}\d{3}\s+'
+                    r'(?!percent|million|billion|basis|points|bps|bp\b)[a-z]', para):
+            continue
         facts.append(para)
     return facts[:25]
 
@@ -207,9 +324,13 @@ def make_definition_question(defn, distractor_pool, vol_num, subject, ch_num, ch
     term = defn['term']
     correct = defn['definition']
 
+    if not quality_ok(correct):
+        return None
+
     # Distractors: other definitions from the same volume (wrong because they define a different term)
     candidates = [d['definition'] for d in distractor_pool
-                  if d['term'] != term and d['definition'] != correct and len(d['definition']) > 20]
+                  if d['term'] != term and d['definition'] != correct
+                  and len(d['definition']) > 20 and quality_ok(d['definition'])]
     random.shuffle(candidates)
     distractors = candidates[:3]
 
@@ -233,16 +354,19 @@ def make_definition_question(defn, distractor_pool, vol_num, subject, ch_num, ch
         "chapterTitle": ch_title,
         "difficulty": difficulty,
         "question": question,
-        "options": [o[:220] for o in options],
+        "options": options,
         "correctIndex": correct_idx,
-        "explanation": f"{term}: {defn['sentence'][:280]}",
+        "explanation": polish(f"{term}: {defn['sentence']}", limit=300),
     }
 
 
 def make_fact_question(fact, fact_pool, vol_num, subject, ch_num, ch_title, difficulty):
     """'Which statement is most accurate?' with other chapter facts as wrong options."""
-    correct = fact
-    others = [f for f in fact_pool if f != correct]
+    correct = polish(fact, limit=240)
+    if not quality_ok(correct):
+        return None
+    others = [polish(f, limit=240) for f in fact_pool if f != fact]
+    others = [o for o in others if o != correct and quality_ok(o)]
     random.shuffle(others)
     if len(others) < 3:
         return None
@@ -261,9 +385,9 @@ def make_fact_question(fact, fact_pool, vol_num, subject, ch_num, ch_title, diff
         "chapterTitle": ch_title,
         "difficulty": difficulty,
         "question": "Which of the following statements is most accurate?",
-        "options": [o[:220] for o in options],
+        "options": options,
         "correctIndex": correct_idx,
-        "explanation": correct[:300],
+        "explanation": correct,
     }
 
 
@@ -273,10 +397,15 @@ def make_flashcards(defs, vol_num, subject, ch_num, ch_title):
     cards = []
     for defn in defs[:12]:
         term = defn['term']
+        # The full definition sentence reads as complete English on its own,
+        # so use it for the answer rather than a bare predicate fragment.
+        back = defn['sentence'] if quality_ok(defn['sentence']) else defn['definition']
+        if not quality_ok(back):
+            continue
         front = f"Define: {term}" if term[0].isupper() else f"What is {term}?"
         cards.append({
             "front": front,
-            "back": defn['definition'][:300],
+            "back": back,
             "topic": f"{subject} — {ch_title}",
             "volume": vol_num,
             "chapter": ch_num,
@@ -286,8 +415,13 @@ def make_flashcards(defs, vol_num, subject, ch_num, ch_title):
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
+import os
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CONTENT_FILE = os.path.join(BASE_DIR, "cfa_content.json")
+QUESTIONS_FILE = os.path.join(BASE_DIR, "questions.js")
+
 print("Loading content from cfa_content.json...")
-with open(r"C:\Users\siddh\cfa-tutor\cfa_content.json", "r", encoding="utf-8") as f:
+with open(CONTENT_FILE, "r", encoding="utf-8") as f:
     data = json.load(f)
 
 SUBJECT_COLORS = {
@@ -376,13 +510,12 @@ output = {
     "subjectColors": SUBJECT_COLORS,
 }
 
-with open(r"C:\Users\siddh\cfa-tutor\questions.js", "w", encoding="utf-8") as f:
+with open(QUESTIONS_FILE, "w", encoding="utf-8") as f:
     f.write("const QUESTION_BANK = ")
     json.dump(output, f, ensure_ascii=False, indent=2)
     f.write(";\n")
 
-import os
-file_size = os.path.getsize(r"C:\Users\siddh\cfa-tutor\questions.js") / (1024 * 1024)
+file_size = os.path.getsize(QUESTIONS_FILE) / (1024 * 1024)
 
 print(f"\n{'='*60}")
 print(f"Generated {len(unique_questions):,} practice questions")

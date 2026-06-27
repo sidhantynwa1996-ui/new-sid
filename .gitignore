@@ -4,3 +4,6 @@ pdfs/
 # Temporary and fragment files
 temp_*.js
 *_fragment.js
+
+__pycache__/
+*.pyc
