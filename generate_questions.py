@@ -153,10 +153,15 @@ SECTION_REF_RE = re.compile(r'\b\d{1,3}\s+[A-Z]')
 
 def clean_term(term):
     """Remove trailing punctuation and section-number artifacts, repair spacing."""
-    term = repair_text(term).rstrip(',;:')
+    term = repair_text(term).strip('"“”\'').rstrip(',;:')
     # Remove leading section references like "9 A" or "33 "
     term = re.sub(r'^\d{1,3}\s+', '', term)
-    term = re.sub(r'^[A-Z]\s+', '', term)  # stray single-letter prefix
+    term = re.sub(r'^[B-HJ-Z]\s+', '', term)  # stray single-letter prefix (keep "A"/"I")
+    # Drop a leading transition adverb so the term is the noun phrase itself,
+    # e.g. "Finally, the least competitive market structure" -> "the least ...".
+    term = re.sub(r'^(?:Finally|However|Moreover|Therefore|Thus|Hence|Furthermore|'
+                  r'Indeed|Similarly|Conversely|Notably|Additionally|First|Second|'
+                  r'Third|Next|Then|In addition|For example)\s*,?\s+', '', term, flags=re.I)
     # Drop a leading ALL-CAPS section heading glued before the real term,
     # e.g. "PRICE-TO-EARNINGS RATIO Price-to-earnings ratio" -> "Price-to-earnings ratio"
     term = re.sub(r'^(?:[A-Z][A-Z\-/]{2,}\s+){1,}(?=[A-Z][a-z])', '', term)
@@ -179,6 +184,12 @@ def extract_definitions(paragraphs):
                 if len(term) < 5 or len(term) > 80:
                     break
                 if any(c in term for c in ('?', '!', '\n', '(', ')')):
+                    break
+                # Reject a term that spans a sentence boundary ("...stage. Who"),
+                # while keeping abbreviations like "U.S." intact.
+                if re.search(r'[a-z]\.\s+[A-Z]', term):
+                    break
+                if len(term.split()) > 12:        # a term is a phrase, not a sentence
                     break
                 if term.lower().startswith(BAD_TERM_STARTS):
                     break
