@@ -1,13 +1,17 @@
-const CACHE_NAME = 'cfa-tutor-v2';
+// Bump CACHE_NAME on every asset change so clients pick up the new files.
+const CACHE_NAME = 'cfa-tutor-v3';
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
   './app.js',
   './questions.js',
+  './curated_questions.js',
   './videos.js',
   './cfa_content.json',
   './icon.svg',
+  './icon-192.png',
+  './icon-512.png',
   './manifest.json'
 ];
 
@@ -27,8 +31,18 @@ self.addEventListener('activate', event => {
   self.clients.claim();
 });
 
+// Network-first: always try the network so updated content (questions, app
+// logic, styles) is shown when online; fall back to the cache only when
+// offline. Successful responses refresh the cache for offline use.
 self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET') return;
   event.respondWith(
-    caches.match(event.request).then(cached => cached || fetch(event.request))
+    fetch(event.request)
+      .then(response => {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy)).catch(() => {});
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
