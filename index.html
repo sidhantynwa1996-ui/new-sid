@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0a1628">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="CFA Tutor">
+    <title>CFA Level I Tutor</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/svg+xml" href="icon.svg">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Top Navigation Bar -->
+        <header class="top-bar">
+            <div class="logo">
+                <span class="logo-icon">CFA</span>
+                <span class="logo-text">Level I Tutor</span>
+            </div>
+            <nav class="main-nav">
+                <button class="nav-btn active" data-view="dashboard" onclick="showView('dashboard')">
+                    <span class="nav-icon">&#9632;</span> Dashboard
+                </button>
+                <button class="nav-btn" data-view="study" onclick="showView('study')">
+                    <span class="nav-icon">&#9733;</span> Study
+                </button>
+                <button class="nav-btn" data-view="practice" onclick="showView('practice')">
+                    <span class="nav-icon">&#9998;</span> Practice
+                </button>
+                <button class="nav-btn" data-view="flashcards" onclick="showView('flashcards')">
+                    <span class="nav-icon">&#9830;</span> Flashcards
+                </button>
+                <button class="nav-btn" data-view="exam" onclick="showView('exam')">
+                    <span class="nav-icon">&#9201;</span> Mock Exam
+                </button>
+                <button class="nav-btn" data-view="review" onclick="showView('review')">
+                    <span class="nav-icon">&#8634;</span> Review Queue
+                </button>
+                <button class="nav-btn" data-view="syllabus" onclick="showView('syllabus')">
+                    <span class="nav-icon">&#128218;</span> Syllabus
+                </button>
+                <button class="nav-btn" data-view="plan" onclick="showView('plan')">
+                    <span class="nav-icon">&#9776;</span> Study Plan
+                </button>
+            </nav>
+            <div class="streak-badge">
+                <span id="streakCount">0</span> day streak
+            </div>
+        </header>
+
+        <!-- Dashboard View -->
+        <div id="view-dashboard" class="view active">
+            <div class="dashboard-grid">
+                <div class="dash-card welcome-card">
+                    <h1>Welcome to CFA Level I Tutor</h1>
+                    <p>Your personalized study companion for the 2025 CFA Program Curriculum</p>
+                    <div class="overall-progress">
+                        <div class="progress-ring">
+                            <svg viewBox="0 0 120 120">
+                                <circle class="progress-bg" cx="60" cy="60" r="54" />
+                                <circle id="overallProgressCircle" class="progress-fill" cx="60" cy="60" r="54" />
+                            </svg>
+                            <div class="progress-text">
+                                <span id="overallPercent">0</span>%
+                            </div>
+                        </div>
+                        <div class="progress-details">
+                            <h3>Overall Progress</h3>
+                            <p><span id="modulesCompleted">0</span> of <span id="totalModules">94</span> modules studied</p>
+                            <p><span id="questionsAnswered">0</span> practice questions completed</p>
+                            <p><span id="flashcardsReviewed">0</span> flashcards reviewed</p>
+                            <p><span id="videosWatched">0</span> tutor videos watched</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dash-card review-alert" id="reviewAlert" style="display:none;">
+                    <h3>&#128276; Review Due!</h3>
+                    <p>You have <span id="reviewDueCount">0</span> topics ready for review.</p>
+                    <button class="btn-primary" onclick="showView('review')">Start Review</button>
+                </div>
+
+                <div class="dash-card dash-quick-nav" id="dashQuickNav">
+                    <div class="quick-nav-row" id="quickNavRow"></div>
+                </div>
+
+                <div class="dash-card subjects-overview">
+                    <h3>Subjects Overview</h3>
+                    <div id="subjectBars"></div>
+                </div>
+
+                <div class="dash-card recent-activity">
+                    <h3>Continue Studying</h3>
+                    <div id="continueStudying"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Study View -->
+        <div id="view-study" class="view">
+            <div class="study-layout">
+                <aside class="study-sidebar">
+                    <div class="sidebar-header">
+                        <h3>Curriculum</h3>
+                        <div class="sidebar-toggle">
+                            <button class="sidebar-toggle-btn active" data-mode="schedule" onclick="toggleSidebarMode('schedule')">Schedule</button>
+                            <button class="sidebar-toggle-btn" data-mode="subjects" onclick="toggleSidebarMode('subjects')">Subjects</button>
+                        </div>
+                    </div>
+                    <div class="search-box">
+                        <input type="text" id="searchModules" placeholder="Search topics..." oninput="filterModules(this.value)">
+                    </div>
+                    <div id="moduleTree" class="module-tree"></div>
+                </aside>
+                <main class="study-content">
+                    <div id="studyPlaceholder" class="placeholder">
+                        <h2>Select a Learning Module</h2>
+                        <p>Choose a topic from the sidebar to start studying</p>
+                    </div>
+                    <div id="studyReader" class="reader" style="display:none;">
+                        <div class="reader-header">
+                            <div class="reader-breadcrumb" id="readerBreadcrumb"></div>
+                            <div class="reader-actions">
+                                <button class="btn-sm" onclick="markModuleRead()">&#10003; Mark as Read</button>
+                                <button class="btn-sm" onclick="startPracticeForModule()">Practice Questions</button>
+                                <button class="btn-sm" onclick="createFlashcardsForModule()">Create Flashcards</button>
+                                <button class="btn-sm" onclick="showView('syllabus')" title="See where this fits in the schedule">&#128218; Syllabus</button>
+                                <button class="btn-sm" onclick="showView('plan')" title="View your study plan">&#9776; Plan</button>
+                                <button class="btn-icon" onclick="toggleFullscreen()" id="btnFullscreen" title="Fullscreen">&#x26F6; Expand</button>
+                                <button class="btn-icon" onclick="popOutReader()" title="Open in new window">&#x29C9; Pop Out</button>
+                            </div>
+                        </div>
+                        <div id="videoPanel" class="video-panel" style="display:none;">
+                            <div class="video-panel-header" onclick="toggleVideoPanel()">
+                                <div class="video-panel-title">
+                                    <span class="video-icon">&#9654;</span>
+                                    <span>Tutor Videos</span>
+                                    <span class="video-badge" id="videoBadge">0</span>
+                                    <span class="video-source">letmeexplain.eu</span>
+                                </div>
+                                <span class="video-panel-arrow" id="videoPanelArrow">&#9660;</span>
+                            </div>
+                            <div class="video-panel-body" id="videoPanelBody" style="display:none;">
+                                <div class="video-panel-tip">Watch these before or alongside reading for deeper understanding</div>
+                                <div id="videoList" class="video-list"></div>
+                            </div>
+                        </div>
+                        <div class="reader-with-toc">
+                            <div class="reader-toc" id="readerToc">
+                                <h4>In This Module</h4>
+                                <div id="tocList"></div>
+                            </div>
+                            <div class="reader-main-content" id="readerContent"></div>
+                        </div>
+                        <div class="reader-nav">
+                            <button class="btn-secondary" id="prevModule" onclick="navigateModule(-1)">&#8592; Previous Module</button>
+                            <button class="btn-primary" id="nextModule" onclick="navigateModule(1)">Next Module &#8594;</button>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        </div>
+
+        <!-- Practice View -->
+        <div id="view-practice" class="view">
+            <div class="practice-layout">
+                <div id="practiceSetup" class="practice-setup">
+                    <h2>Practice Questions</h2>
+                    <p>Select a subject and start practicing</p>
+                    <div class="practice-options">
+                        <div class="option-group">
+                            <label>Subject</label>
+                            <select id="practiceSubject" onchange="updatePracticeModules()">
+                                <option value="all">All Subjects</option>
+                            </select>
+                        </div>
+                        <div class="option-group">
+                            <label>Module</label>
+                            <select id="practiceModule">
+                                <option value="all">All Modules</option>
+                            </select>
+                        </div>
+                        <div class="option-group">
+                            <label>Number of Questions</label>
+                            <select id="practiceCount">
+                                <option value="5">5 Questions</option>
+                                <option value="10" selected>10 Questions</option>
+                                <option value="20">20 Questions</option>
+                                <option value="30">30 Questions</option>
+                            </select>
+                        </div>
+                        <div class="option-group">
+                            <label>Difficulty</label>
+                            <select id="practiceDifficulty">
+                                <option value="mixed" selected>Mixed</option>
+                                <option value="easy">Easy</option>
+                                <option value="medium">Medium</option>
+                                <option value="hard">Hard</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn-primary btn-large" onclick="startPractice()">Start Practice Session</button>
+                    <div class="view-nav-strip">
+                        <span class="view-nav-label">Or go to:</span>
+                        <button class="btn-sm" onclick="showView('study')">&#9733; Study</button>
+                        <button class="btn-sm" onclick="showView('flashcards')">&#9830; Flashcards</button>
+                        <button class="btn-sm" onclick="showView('exam')">&#9201; Mock Exam</button>
+                        <button class="btn-sm" onclick="showView('syllabus')">&#128218; Syllabus</button>
+                        <button class="btn-sm" onclick="showView('plan')">&#9776; Study Plan</button>
+                    </div>
+                </div>
+
+                <div id="practiceSession" class="practice-session" style="display:none;">
+                    <div class="practice-header">
+                        <div class="practice-progress">
+                            Question <span id="currentQ">1</span> of <span id="totalQ">10</span>
+                        </div>
+                        <div class="practice-score">
+                            Score: <span id="practiceScore">0</span>/<span id="practiceAttempted">0</span>
+                        </div>
+                        <button class="btn-sm btn-danger" onclick="endPractice()">End Session</button>
+                    </div>
+                    <div class="practice-progress-bar">
+                        <div id="practiceProgressBar" class="progress-fill-bar"></div>
+                    </div>
+                    <div id="questionCard" class="question-card"></div>
+                </div>
+
+                <div id="practiceResults" class="practice-results" style="display:none;">
+                    <h2>Session Results</h2>
+                    <div class="results-summary" id="resultsSummary"></div>
+                    <div class="results-detail" id="resultsDetail"></div>
+                    <div class="results-actions">
+                        <button class="btn-primary" onclick="showPracticeSetup()">New Session</button>
+                        <button class="btn-secondary" onclick="reviewMissed()">Review Missed Questions</button>
+                    </div>
+                    <div class="view-nav-strip">
+                        <span class="view-nav-label">Continue to:</span>
+                        <button class="btn-sm" onclick="showView('study')">&#9733; Study</button>
+                        <button class="btn-sm" onclick="showView('flashcards')">&#9830; Flashcards</button>
+                        <button class="btn-sm" onclick="showView('review')">&#8634; Review Queue</button>
+                        <button class="btn-sm" onclick="showView('syllabus')">&#128218; Syllabus</button>
+                        <button class="btn-sm" onclick="showView('plan')">&#9776; Study Plan</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Flashcards View -->
+        <div id="view-flashcards" class="view">
+            <div class="flashcard-layout">
+                <div id="flashcardSetup" class="flashcard-setup">
+                    <h2>Flashcards</h2>
+                    <p>Review key concepts with spaced repetition</p>
+                    <div class="flashcard-stats">
+                        <div class="fc-stat">
+                            <span class="fc-stat-num" id="fcNew">0</span>
+                            <span class="fc-stat-label">New</span>
+                        </div>
+                        <div class="fc-stat">
+                            <span class="fc-stat-num" id="fcDue">0</span>
+                            <span class="fc-stat-label">Due Today</span>
+                        </div>
+                        <div class="fc-stat">
+                            <span class="fc-stat-num" id="fcTotal">0</span>
+                            <span class="fc-stat-label">Total Cards</span>
+                        </div>
+                    </div>
+                    <div class="practice-options">
+                        <div class="option-group">
+                            <label>Subject Filter</label>
+                            <select id="flashcardSubject">
+                                <option value="all">All Subjects</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn-primary btn-large" onclick="startFlashcards()">Start Review</button>
+                    <button class="btn-secondary btn-large" onclick="generateAllFlashcards()">Generate Flashcards for Studied Topics</button>
+                    <div class="view-nav-strip">
+                        <span class="view-nav-label">Also try:</span>
+                        <button class="btn-sm" onclick="showView('study')">&#9733; Study</button>
+                        <button class="btn-sm" onclick="showView('practice')">&#9998; Practice</button>
+                        <button class="btn-sm" onclick="showView('review')">&#8634; Review Queue</button>
+                        <button class="btn-sm" onclick="showView('syllabus')">&#128218; Syllabus</button>
+                        <button class="btn-sm" onclick="showView('plan')">&#9776; Study Plan</button>
+                    </div>
+                </div>
+
+                <div id="flashcardSession" class="flashcard-session" style="display:none;">
+                    <div class="fc-progress">
+                        Card <span id="fcCurrent">1</span> of <span id="fcSessionTotal">0</span>
+                    </div>
+                    <div class="flashcard" id="flashcard" onclick="flipFlashcard()">
+                        <div class="flashcard-inner" id="flashcardInner">
+                            <div class="flashcard-front">
+                                <div class="fc-topic" id="fcTopic"></div>
+                                <div class="fc-question" id="fcQuestion"></div>
+                                <div class="fc-hint">Click to reveal answer</div>
+                            </div>
+                            <div class="flashcard-back">
+                                <div class="fc-answer" id="fcAnswer"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="fc-rating" id="fcRating" style="display:none;">
+                        <p>How well did you know this?</p>
+                        <div class="fc-rating-btns">
+                            <button class="btn-again" onclick="rateFlashcard(0)">Again</button>
+                            <button class="btn-hard" onclick="rateFlashcard(1)">Hard</button>
+                            <button class="btn-good" onclick="rateFlashcard(2)">Good</button>
+                            <button class="btn-easy" onclick="rateFlashcard(3)">Easy</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mock Exam View -->
+        <div id="view-exam" class="view">
+            <div class="exam-layout">
+                <div id="examSetup" class="exam-setup">
+                    <h2>CFA Level I Mock Exam</h2>
+                    <p>Simulate the real exam experience</p>
+                    <div class="exam-advisory">
+                        <strong>&#128161; Save the official CFA Institute mock for the final 2 weeks.</strong> Do it full 4.5h, timed, no breaks. Target: <strong>70%+</strong> to pass.
+                    </div>
+                    <div class="exam-info">
+                        <div class="exam-info-card">
+                            <h4>Full Exam</h4>
+                            <p>180 questions</p>
+                            <p>4 hours 30 minutes</p>
+                            <p>Two sessions of 2h15m each</p>
+                            <button class="btn-primary" onclick="startExam('full')">Start Full Exam</button>
+                        </div>
+                        <div class="exam-info-card">
+                            <h4>Mini Mock</h4>
+                            <p>45 questions</p>
+                            <p>1 hour</p>
+                            <p>Quick practice session</p>
+                            <button class="btn-primary" onclick="startExam('mini')">Start Mini Mock</button>
+                        </div>
+                        <div class="exam-info-card">
+                            <h4>Subject Exam</h4>
+                            <p>30 questions</p>
+                            <p>45 minutes</p>
+                            <p>Focus on one subject</p>
+                            <select id="examSubject" class="exam-subject-select">
+                                <option value="">Select Subject...</option>
+                            </select>
+                            <button class="btn-primary" onclick="startExam('subject')" style="margin-top:8px;">Start Subject Exam</button>
+                        </div>
+                    </div>
+                    <div class="view-nav-strip">
+                        <span class="view-nav-label">Prepare first:</span>
+                        <button class="btn-sm" onclick="showView('practice')">&#9998; Practice</button>
+                        <button class="btn-sm" onclick="showView('flashcards')">&#9830; Flashcards</button>
+                        <button class="btn-sm" onclick="showView('study')">&#9733; Study</button>
+                        <button class="btn-sm" onclick="showView('syllabus')">&#128218; Syllabus</button>
+                        <button class="btn-sm" onclick="showView('plan')">&#9776; Study Plan</button>
+                    </div>
+                </div>
+
+                <div id="examSession" class="exam-session" style="display:none;">
+                    <div class="exam-header">
+                        <div class="exam-timer">
+                            <span class="timer-icon">&#9201;</span>
+                            <span id="examTimer">02:15:00</span>
+                        </div>
+                        <div class="exam-progress-info">
+                            Question <span id="examCurrentQ">1</span> / <span id="examTotalQ">90</span>
+                        </div>
+                        <div class="exam-actions">
+                            <button class="btn-sm" onclick="flagQuestion()">&#9873; Flag</button>
+                            <button class="btn-sm btn-danger" onclick="submitExam()">Submit Exam</button>
+                        </div>
+                    </div>
+                    <div class="exam-body">
+                        <div class="exam-question-area" id="examQuestionArea"></div>
+                        <div class="exam-navigator">
+                            <h4>Question Navigator</h4>
+                            <div id="examNav" class="exam-nav-grid"></div>
+                            <div class="exam-nav-legend">
+                                <span class="legend-item"><span class="legend-dot answered"></span> Answered</span>
+                                <span class="legend-item"><span class="legend-dot flagged"></span> Flagged</span>
+                                <span class="legend-item"><span class="legend-dot unanswered"></span> Unanswered</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="exam-footer">
+                        <button class="btn-secondary" id="examPrev" onclick="examNavigate(-1)">&#8592; Previous</button>
+                        <button class="btn-primary" id="examNext" onclick="examNavigate(1)">Next &#8594;</button>
+                    </div>
+                </div>
+
+                <div id="examResults" class="exam-results" style="display:none;"></div>
+            </div>
+        </div>
+
+        <!-- Review Queue View -->
+        <div id="view-review" class="view">
+            <div class="review-layout">
+                <h2>Spaced Review Queue</h2>
+                <p>Topics you've studied come back for review on a schedule to help you retain what you've learned.</p>
+                <div id="reviewList" class="review-list"></div>
+                <div class="view-nav-strip" style="margin-top:24px;">
+                    <span class="view-nav-label">Navigate:</span>
+                    <button class="btn-sm" onclick="showView('study')">&#9733; Study</button>
+                    <button class="btn-sm" onclick="showView('practice')">&#9998; Practice</button>
+                    <button class="btn-sm" onclick="showView('flashcards')">&#9830; Flashcards</button>
+                    <button class="btn-sm" onclick="showView('syllabus')">&#128218; Syllabus</button>
+                    <button class="btn-sm" onclick="showView('plan')">&#9776; Study Plan</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Syllabus View -->
+        <div id="view-syllabus" class="view">
+            <div class="syllabus-layout">
+                <div class="syllabus-header-card">
+                    <h1>Complete Study Syllabus</h1>
+                    <p>Every topic, every week, every module &mdash; your full 16-week roadmap with daily pacing and strategy tips. Click any module to start studying.</p>
+                    <div class="syllabus-header-actions">
+                        <div class="syllabus-stats-row" id="syllabusStats"></div>
+                        <button class="btn-print" onclick="printTimetable()">&#128424; Print Wall Timetable</button>
+                    </div>
+                </div>
+                <div class="syllabus-walkthrough" id="syllabusWalkthrough"></div>
+                <div id="syllabusContent"></div>
+            </div>
+        </div>
+
+        <!-- Study Plan View -->
+        <div id="view-plan" class="view">
+            <div class="plan-layout">
+                <!-- Countdown & Today's Focus -->
+                <div class="plan-hero">
+                    <div class="plan-countdown">
+                        <div class="countdown-number" id="planDaysLeft">0</div>
+                        <div class="countdown-label">days to exam</div>
+                        <div class="countdown-date">October 12, 2026</div>
+                    </div>
+                    <div class="plan-today">
+                        <h2>Today's Study Plan</h2>
+                        <div class="plan-phase-badge" id="planPhaseBadge">PHASE 1: LEARN</div>
+                        <div id="planTodayTasks" class="plan-today-tasks"></div>
+                    </div>
+                </div>
+
+                <div class="view-nav-strip plan-nav-strip">
+                    <span class="view-nav-label">Jump to:</span>
+                    <button class="btn-sm" onclick="showView('syllabus')">&#128218; Full Syllabus</button>
+                    <button class="btn-sm" onclick="showView('study')">&#9733; Study</button>
+                    <button class="btn-sm" onclick="showView('practice')">&#9998; Practice</button>
+                    <button class="btn-sm" onclick="showView('flashcards')">&#9830; Flashcards</button>
+                    <button class="btn-sm" onclick="showView('exam')">&#9201; Mock Exam</button>
+                    <button class="btn-sm" onclick="showView('review')">&#8634; Review Queue</button>
+                    <button class="btn-sm" onclick="printTimetable()">&#128424; Print Timetable</button>
+                </div>
+
+                <!-- Daily Routine - Primary Section -->
+                <div class="plan-daily-section">
+                    <div class="plan-daily-section-header">
+                        <div class="plan-daily-title-group">
+                            <h2>Your Daily Routine</h2>
+                            <p>Structured around your 7:30 AM - 7:30 PM work schedule</p>
+                        </div>
+                    </div>
+                    <div id="planDailyRoutine" class="plan-daily-routine"></div>
+                </div>
+
+                <!-- Weekly Progress -->
+                <div class="plan-row">
+                    <div class="plan-card plan-week-card">
+                        <h3>This Week <span id="planWeekNum" class="plan-week-label">Week 1</span></h3>
+                        <div id="planWeekSubject" class="plan-week-subject"></div>
+                        <div class="plan-week-progress">
+                            <div class="plan-week-bar-track">
+                                <div class="plan-week-bar-fill" id="planWeekBar"></div>
+                            </div>
+                            <span id="planWeekPct">0%</span>
+                        </div>
+                        <div id="planWeekModules" class="plan-week-modules"></div>
+                    </div>
+                </div>
+
+                <!-- Full 16-Week Schedule -->
+                <div class="plan-card plan-full-schedule">
+                    <div class="plan-schedule-header">
+                        <div>
+                            <h3>16-Week Study Schedule</h3>
+                            <p class="plan-subtitle">Your roadmap from now to exam day. Completed weeks are marked green.</p>
+                        </div>
+                        <button class="btn-secondary" onclick="showView('syllabus')" style="flex-shrink:0;">&#128218; View Full Syllabus</button>
+                    </div>
+                    <div id="planScheduleGrid" class="plan-schedule-grid"></div>
+                    <div class="plan-note plan-note-ethics">
+                        <strong>&#9888; Ethics is a TIEBREAKER</strong> &mdash; Candidates near the minimum passing score get bumped by strong Ethics performance. Do not coast on Ethics. Week 15's full Ethics re-read is non-negotiable &mdash; protect it from mock exam squeeze.
+                    </div>
+                    <div class="plan-note plan-note-fsa">
+                        <strong>&#128204; If you fall behind</strong>, borrow time from Derivatives/Alternatives &mdash; never from FSA, Fixed Income, or Ethics.
+                    </div>
+                </div>
+
+                <!-- Exam Weight Chart -->
+                <div class="plan-card">
+                    <h3>CFA Level I Exam Weights</h3>
+                    <p class="plan-subtitle">Focus your energy on the highest-weighted topics.</p>
+                    <div id="planWeightChart" class="plan-weight-chart"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="questions.js"></script>
+    <script src="videos.js"></script>
+    <script src="app.js"></script>
+    <script>
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js');
+    }
+    </script>
+</body>
+</html>

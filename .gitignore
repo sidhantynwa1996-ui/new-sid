@@ -1,0 +1,6 @@
+# CFA PDF source files (copyrighted + too large)
+pdfs/
+
+# Temporary and fragment files
+temp_*.js
+*_fragment.js
